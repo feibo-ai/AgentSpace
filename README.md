@@ -2,7 +2,7 @@
   <img src="asset/agentspace-logo.png" alt="AgentSpace logo" width="220" />
 </p>
 
-<h2 align="center" style="font-size: 2rem;">AgentSpace: Human + Agents. One Team. One Workspace</h2>
+<h1 align="center" style="font-size: 2.5rem; font-weight: bold;">AgentSpace: Human + Agents. One Team. One Workspace</h1>
 
 <p align="center">
   <strong>English</strong> | <a href="README_ZH.md">中文</a>
