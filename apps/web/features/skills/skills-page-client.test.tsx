@@ -1,0 +1,386 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SkillsPageClient } from "@/features/skills/skills-page-client";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { FeedbackToastProvider } from "@/shared/ui/feedback-toast-provider";
+import type { SkillsPageData } from "@/features/dashboard/data";
+
+const searchParams = new URLSearchParams();
+const {
+  mockCreateWorkspaceSkillAction,
+  mockDeleteWorkspaceSkillAction,
+  mockDeleteWorkspaceSkillFileAction,
+  mockImportWorkspaceSkillFromUrlAction,
+  mockUpdateWorkspaceSkillMetaAction,
+  mockUpsertWorkspaceSkillFileAction,
+} = vi.hoisted(() => ({
+  mockCreateWorkspaceSkillAction: vi.fn(async () => ({
+    data: { skillId: "skill-1", fileId: "file-1" },
+    toast: { tone: "success", zh: "Skill 已创建。", en: "Skill created." },
+  })),
+  mockDeleteWorkspaceSkillAction: vi.fn(async () => ({
+    data: undefined,
+    toast: { tone: "success", zh: "Skill 已删除。", en: "Skill deleted." },
+  })),
+  mockDeleteWorkspaceSkillFileAction: vi.fn(async () => ({
+    data: undefined,
+    toast: { tone: "success", zh: "Skill 文件已删除。", en: "Skill file deleted." },
+  })),
+  mockImportWorkspaceSkillFromUrlAction: vi.fn(async () => ({
+    data: { skillId: "skill-3", renamed: false, replaced: false, skipped: false },
+    toast: { tone: "success", zh: "Skill 已导入。", en: "Skill imported." },
+  })),
+  mockUpdateWorkspaceSkillMetaAction: vi.fn(async () => ({
+    data: undefined,
+    toast: { tone: "success", zh: "Skill 元数据已保存。", en: "Skill metadata saved." },
+  })),
+  mockUpsertWorkspaceSkillFileAction: vi.fn(async () => ({
+    data: { fileId: "file-2" },
+    toast: { tone: "success", zh: "Skill 文件已保存。", en: "Skill file saved." },
+  })),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: vi.fn(),
+    replace: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: (key: string) => searchParams.get(key),
+    toString: () => searchParams.toString(),
+  }),
+}));
+
+vi.mock("@/features/skills/actions", () => ({
+  createWorkspaceSkillAction: mockCreateWorkspaceSkillAction,
+  deleteWorkspaceSkillAction: mockDeleteWorkspaceSkillAction,
+  deleteWorkspaceSkillFileAction: mockDeleteWorkspaceSkillFileAction,
+  importWorkspaceSkillFromUrlAction: mockImportWorkspaceSkillFromUrlAction,
+  updateWorkspaceSkillMetaAction: mockUpdateWorkspaceSkillMetaAction,
+  upsertWorkspaceSkillFileAction: mockUpsertWorkspaceSkillFileAction,
+}));
+
+function mockMatchMedia(matches: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches,
+      media: "(max-width: 860px)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+const data: SkillsPageData = {
+  skills: [
+    {
+      id: "skill-1",
+      name: "workspace-context",
+      isBuiltin: true,
+      sourceType: "builtin",
+      description: "Inspect workspace context",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T09:00:00.000Z",
+      files: [
+        {
+          id: "file-1",
+          path: "SKILL.md",
+          content: "# Workspace Context",
+          createdAt: "2026-04-10T08:00:00.000Z",
+          updatedAt: "2026-04-10T09:00:00.000Z",
+        },
+        {
+          id: "file-2",
+          path: "references/checklist.md",
+          content: "- check context",
+          createdAt: "2026-04-10T08:10:00.000Z",
+          updatedAt: "2026-04-10T09:10:00.000Z",
+        },
+      ],
+    },
+    {
+      id: "skill-2",
+      name: "update-channel-documents",
+      isBuiltin: true,
+      sourceType: "builtin",
+      description: "Update shared channel documents",
+      createdAt: "2026-04-10T10:00:00.000Z",
+      updatedAt: "2026-04-10T11:00:00.000Z",
+      files: [
+        {
+          id: "file-4",
+          path: "SKILL.md",
+          content: "# Update Channel Documents",
+          createdAt: "2026-04-10T10:00:00.000Z",
+          updatedAt: "2026-04-10T11:00:00.000Z",
+        },
+      ],
+    },
+    {
+      id: "skill-3",
+      name: "research-pack",
+      isBuiltin: false,
+      sourceType: "github",
+      sourceUrl: "https://github.com/octo-org/skill-repo/tree/main/skills/research-pack",
+      description: "Research helper",
+      createdAt: "2026-04-10T10:00:00.000Z",
+      updatedAt: "2026-04-10T11:00:00.000Z",
+      files: [
+        {
+          id: "file-3",
+          path: "SKILL.md",
+          content: "# Research Pack",
+          createdAt: "2026-04-10T10:00:00.000Z",
+          updatedAt: "2026-04-10T11:00:00.000Z",
+        },
+      ],
+    },
+    {
+      id: "skill-4",
+      name: "meeting-notes",
+      isBuiltin: false,
+      sourceType: "manual",
+      description: "Meeting capture helper",
+      createdAt: "2026-04-11T10:00:00.000Z",
+      updatedAt: "2026-04-11T11:00:00.000Z",
+      files: [
+        {
+          id: "file-5",
+          path: "SKILL.md",
+          content: "# Meeting Notes",
+          createdAt: "2026-04-11T10:00:00.000Z",
+          updatedAt: "2026-04-11T11:00:00.000Z",
+        },
+      ],
+    },
+  ],
+  totalSkills: 4,
+  assignedSkillCount: 4,
+  recentImports: [
+    {
+      id: "import-1",
+      skillId: "skill-3",
+      skillName: "research-pack",
+      sourceType: "github",
+      sourceUrl: "https://github.com/octo-org/skill-repo/tree/main/skills/research-pack",
+      importMode: "created",
+      importedAt: "2026-04-12T11:00:00.000Z",
+      warnings: [],
+    },
+    {
+      id: "import-2",
+      skillId: "skill-missing",
+      skillName: "archived-pack",
+      sourceType: "clawhub",
+      sourceUrl: "https://clawhub.ai/fangkelvin/find-skills-skill",
+      importMode: "replaced",
+      importedAt: "2026-04-13T11:00:00.000Z",
+      warnings: ["Skipped non-text package asset"],
+    },
+  ],
+  agents: [
+    {
+      id: "agent:atlas",
+      name: "Atlas",
+      internalName: "atlas",
+      skillIds: ["skill-1", "skill-2", "skill-3", "skill-4"],
+    },
+  ],
+};
+
+function renderSkillsPage(): ReturnType<typeof render> {
+  return render(
+    <LanguageProvider>
+      <FeedbackToastProvider>
+        <SkillsPageClient data={data} />
+      </FeedbackToastProvider>
+    </LanguageProvider>,
+  );
+}
+
+describe("SkillsPageClient", () => {
+  beforeEach(() => {
+    mockMatchMedia(false);
+    searchParams.forEach((_, key) => searchParams.delete(key));
+    mockCreateWorkspaceSkillAction.mockClear();
+    mockDeleteWorkspaceSkillAction.mockClear();
+    mockDeleteWorkspaceSkillFileAction.mockClear();
+    mockImportWorkspaceSkillFromUrlAction.mockClear();
+    mockUpdateWorkspaceSkillMetaAction.mockClear();
+    mockUpsertWorkspaceSkillFileAction.mockClear();
+  });
+
+  it("distinguishes builtin and general skills in the list", () => {
+    renderSkillsPage();
+
+    expect(screen.getAllByText("系统默认技能").length).toBeGreaterThan(0);
+    expect(screen.getByText("一般技能")).toBeInTheDocument();
+    expect(screen.getAllByText("系统默认").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GitHub").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Files")).not.toBeInTheDocument();
+  });
+
+  it("opens the import modal and submits the import request", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    await user.click(screen.getByRole("button", { name: "导入 Skill" }));
+
+    expect(await screen.findByRole("heading", { name: "导入 Skill" })).toBeInTheDocument();
+    await user.type(
+      screen.getByRole("textbox", { name: "来源 URL" }),
+      "https://github.com/octo-org/skill-repo/tree/main/skills/research-pack",
+    );
+    await user.click(screen.getByRole("button", { name: "开始导入" }));
+
+    expect(await screen.findByText("Skill 已导入。")).toBeInTheDocument();
+  });
+
+  it("normalizes marketplace import shortcuts before submitting", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    await user.click(screen.getByRole("button", { name: "导入 Skill" }));
+    await user.click(screen.getByRole("button", { name: "选择 skills.sh 导入来源" }));
+    await user.type(screen.getByRole("textbox", { name: "来源 URL" }), "apollographql/skills/skill-creator");
+    await user.click(screen.getByRole("button", { name: "开始导入" }));
+
+    expect(mockImportWorkspaceSkillFromUrlAction).toHaveBeenCalledWith({
+      url: "https://skills.sh/apollographql/skills/skill-creator",
+      conflict: "rename",
+    });
+  });
+
+  it("normalizes ClawHub shorthand imports before submitting", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    await user.click(screen.getByRole("button", { name: "导入 Skill" }));
+    await user.click(screen.getByRole("button", { name: "选择 ClawHub 导入来源" }));
+    await user.type(screen.getByRole("textbox", { name: "来源 URL" }), "fangkelvin/find-skills-skill");
+    await user.click(screen.getByRole("button", { name: "开始导入" }));
+
+    expect(mockImportWorkspaceSkillFromUrlAction).toHaveBeenCalledWith({
+      url: "https://clawhub.ai/fangkelvin/find-skills-skill",
+      conflict: "rename",
+    });
+  });
+
+  it("filters skills by source type", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    expect(screen.getByRole("button", { name: /meeting-notes/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "GitHub" }));
+
+    expect(screen.getAllByRole("button", { name: /research-pack/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /meeting-notes/i })).not.toBeInTheDocument();
+  });
+
+  it("shows source badges in the list without a separate import history panel", () => {
+    renderSkillsPage();
+
+    expect(screen.queryByText("最近导入")).not.toBeInTheDocument();
+    expect(screen.getAllByText("GitHub").length).toBeGreaterThan(0);
+    expect(screen.getByText("工作区")).toBeInTheDocument();
+  });
+
+  it("switches between skill list and editor on compact layouts", async () => {
+    mockMatchMedia(true);
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    expect(screen.getByRole("button", { name: /workspace-context/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "返回技能列表" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存文件" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /workspace-context/i }));
+
+    expect(await screen.findByRole("button", { name: "返回技能列表" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存 Skill" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "返回文件列表" })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("SKILL.md")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("# Workspace Context")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "返回技能列表" }));
+    expect(screen.getByRole("button", { name: /workspace-context/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "返回技能列表" })).not.toBeInTheDocument();
+  });
+
+  it("opens the create-skill modal from query params", async () => {
+    searchParams.set("create", "skill");
+
+    renderSkillsPage();
+
+    expect(await screen.findByRole("heading", { name: "创建 Skill" })).toBeInTheDocument();
+  });
+
+  it("imports a preset skill from the create skill marketplace", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    await user.click(screen.getByRole("button", { name: "新建 Skill" }));
+    expect(await screen.findByRole("heading", { name: "创建 Skill" })).toBeInTheDocument();
+    expect(screen.getByText("Financial Analysis Agent")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "导入预设" })[0]!);
+
+    await waitFor(() => {
+      expect(mockImportWorkspaceSkillFromUrlAction).toHaveBeenCalledWith({
+        url: "https://skills.sh/qodex-ai/ai-agent-skills/financial-analysis-agent",
+        conflict: "rename",
+      });
+    });
+  });
+
+  it("renders builtin skills as read-only in the editor", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    await user.click(screen.getByRole("button", { name: /workspace-context/i }));
+
+    expect(screen.getByDisplayValue("workspace-context")).toBeDisabled();
+    expect(screen.getByDisplayValue("# Workspace Context")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "删除 Skill" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存 Skill" })).toBeDisabled();
+    expect(screen.queryByDisplayValue("Inspect workspace context")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新建 Skill 文件" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除文件" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the imported skill editor focused on name content and assigned agents", async () => {
+    const user = userEvent.setup();
+
+    renderSkillsPage();
+
+    await user.click(screen.getAllByRole("button", { name: /research-pack/i })[0]!);
+
+    expect(screen.getByDisplayValue("research-pack")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("# Research Pack")).toBeInTheDocument();
+    expect(screen.getByText("Atlas")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除 Skill" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "保存 Skill" })).toBeDisabled();
+    expect(screen.queryByText("类型：GitHub 导入")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "查看来源" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/删除后会自动解除 1 个 Agent 的绑定/)).not.toBeInTheDocument();
+    expect(screen.queryByText("选择当前筛选结果")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /批量删除/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /批量导出/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /批量重新导入/i })).not.toBeInTheDocument();
+  });
+});

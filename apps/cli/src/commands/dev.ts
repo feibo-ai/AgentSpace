@@ -1,0 +1,29 @@
+import { spawn } from "node:child_process";
+
+export async function runDevCommand(args: string[]): Promise<number> {
+  const [target, ...rest] = args;
+
+  if (target !== "web") {
+    console.error("Usage: agent-space dev web [--port <n>] [--hostname <host>]");
+    return 1;
+  }
+
+  const forwardedArgs = ["--prefix", "apps/web", "run", "dev", "--"];
+  if (rest.length > 0) {
+    forwardedArgs.push(...rest);
+  } else {
+    forwardedArgs.push("--hostname", "0.0.0.0", "--port", "1455");
+  }
+
+  const child = spawn("npm", forwardedArgs, {
+    stdio: "inherit",
+  });
+
+  return await new Promise<number>((resolve) => {
+    child.on("close", (code) => resolve(code ?? 1));
+    child.on("error", () => {
+      console.error("Failed to start npm. Ensure npm is installed and available on PATH.");
+      resolve(1);
+    });
+  });
+}

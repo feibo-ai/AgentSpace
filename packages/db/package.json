@@ -1,0 +1,38 @@
+{
+  "name": "@agent-space/db",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./postgres": {
+      "types": "./dist-types/postgres.d.ts",
+      "default": "./src/postgres.ts"
+    },
+    "./postgres-schema": {
+      "types": "./dist-types/postgres-schema.d.ts",
+      "default": "./src/postgres-schema.ts"
+    }
+  },
+  "scripts": {
+    "types": "../../apps/web/node_modules/.bin/tsc -p tsconfig.types.json --incremental false",
+    "postgres": "node --experimental-strip-types ./src/postgres-cli.ts",
+    "postgres:status": "node --experimental-strip-types ./src/postgres-cli.ts status",
+    "postgres:init": "node --experimental-strip-types ./src/postgres-cli.ts init",
+    "postgres:migrate": "node --experimental-strip-types ./src/postgres-cli.ts migrate-from-sqlite",
+    "postgres:cutover-plan": "node --experimental-strip-types ./src/postgres-cli.ts cutover-plan"
+  },
+  "dependencies": {
+    "@agent-space/domain": "file:../domain",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/pg": "^8.20.0",
+    "typescript": "^5.9.3"
+  }
+}

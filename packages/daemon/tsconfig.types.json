@@ -1,0 +1,46 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "types": [
+      "node"
+    ],
+    "typeRoots": [
+      "../../apps/cli/node_modules/@types"
+    ],
+    "rootDir": "./src",
+    "outDir": "./dist-types",
+    "paths": {
+      "@agent-space/domain": [
+        "../domain/dist-types/index.d.ts"
+      ],
+      "@agent-space/domain/*": [
+        "../domain/dist-types/*"
+      ],
+      "@agent-space/db": [
+        "../db/dist-types/index.d.ts"
+      ],
+      "@agent-space/db/*": [
+        "../db/dist-types/*"
+      ],
+      "@agent-space/services": [
+        "../services/dist-types/index.d.ts"
+      ],
+      "@agent-space/services/*": [
+        "../services/dist-types/*"
+      ],
+      "@agent-space/sandbox": [
+        "../sandbox/dist-types/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
+}

@@ -1,0 +1,150 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ChatAttachmentRow, ConversationMessageBubble } from "@/features/chat/chat-primitives";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import type { MessageAttachment } from "@/shared/types/workspace";
+
+function createAttachment(overrides: Partial<MessageAttachment>): MessageAttachment {
+  return {
+    id: "att-1",
+    fileName: "preview.png",
+    mediaType: "image/png",
+    sizeBytes: 2048,
+    kind: "image",
+    storedPath: "/tmp/preview.png",
+    ...overrides,
+  };
+}
+
+describe("ChatAttachmentRow", () => {
+  it("shows a loading placeholder until an image preview finishes loading", () => {
+    const { container } = render(
+      <ChatAttachmentRow
+        attachments={[createAttachment({ id: "att-image", fileName: "preview.png" })]}
+      />,
+    );
+
+    expect(container.querySelector(".chat-attachment-image__loading")).toBeInTheDocument();
+
+    fireEvent.load(screen.getByAltText("preview.png"));
+
+    expect(container.querySelector(".chat-attachment-image__loading")).not.toBeInTheDocument();
+    expect(screen.getByAltText("preview.png")).toHaveClass("chat-attachment-image__img--ready");
+  });
+
+  it("falls back to a file card when an image preview fails", () => {
+    render(
+      <ChatAttachmentRow
+        attachments={[createAttachment({ id: "att-broken", fileName: "broken-preview.png" })]}
+      />,
+    );
+
+    fireEvent.error(screen.getByAltText("broken-preview.png"));
+
+    expect(screen.queryByAltText("broken-preview.png")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /broken-preview\.png/i })).toHaveClass("chat-attachment-file");
+    expect(screen.getByText("IMG")).toBeInTheDocument();
+  });
+});
+
+describe("ConversationMessageBubble", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("translates the system speaker label in English", () => {
+    render(
+      <LanguageProvider initialLanguage="en">
+        <ConversationMessageBubble
+          message={{
+            id: "message-system",
+            speaker: "系统提示",
+            role: "agent",
+            content: "A background update completed.",
+            timestamp: "10:00",
+            status: "completed",
+          }}
+        />
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText("System Notice")).toBeInTheDocument();
+    expect(screen.queryByText("系统提示")).not.toBeInTheDocument();
+  });
+
+  it("renders human and agent mentions with mention type metadata", () => {
+    render(
+      <LanguageProvider>
+        <ConversationMessageBubble
+          message={{
+            id: "message-1",
+            speaker: "Atlas",
+            role: "agent",
+            content: "@Mina 请确认预算口径。@Nova 你继续生成草案。",
+            timestamp: "10:00",
+            status: "completed",
+            mentions: [
+              {
+                humanId: "Mina",
+                label: "Mina",
+                token: "Mina",
+                mentionType: "human",
+                inChannel: true,
+              },
+              {
+                agentId: "Nova",
+                label: "Nova",
+                token: "Nova",
+                mentionType: "agent",
+                inChannel: true,
+              },
+            ],
+          }}
+        />
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText("@Mina")).toHaveAttribute("data-mention-type", "human");
+    expect(screen.getByText("@Nova")).toHaveAttribute("data-mention-type", "agent");
+    expect(screen.getByText("@Mina")).toHaveAttribute("title", "Human mention: Mina");
+    expect(screen.getByText("@Nova")).toHaveAttribute("title", "Agent mention: Nova");
+  });
+
+  it("renders inline runtime approval actions", async () => {
+    const user = userEvent.setup();
+    const onReviewApproval = vi.fn(async () => {});
+
+    render(
+      <LanguageProvider>
+        <ConversationMessageBubble
+          message={{
+            id: "message-approval",
+            speaker: "系统提示",
+            role: "agent",
+            content: "Atlas requested permission to run Bash",
+            code: "approval.created",
+            data: {
+              approval_id: "approval-1",
+              approval_type: "runtime_tool",
+              approval_status: "pending",
+              agent_id: "Atlas",
+              tool_name: "Bash",
+              content_preview: "Bash: npm run test",
+            },
+            timestamp: "10:00",
+            status: "completed",
+          }}
+          onReviewApproval={onReviewApproval}
+        />
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText("等待审批")).toBeInTheDocument();
+    expect(screen.getByText("Bash: npm run test")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "批准" }));
+
+    expect(onReviewApproval).toHaveBeenCalledWith("approval-1", "approved");
+  });
+});

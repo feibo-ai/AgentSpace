@@ -1,0 +1,29 @@
+{
+  "name": "@agent-space/services",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "types": "../../apps/web/node_modules/.bin/tsc -p tsconfig.types.json --incremental false"
+  },
+  "dependencies": {
+    "@agent-space/db": "file:../db",
+    "@agent-space/domain": "file:../domain",
+    "fflate": "^0.8.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./storage/storage-scan": {
+      "types": "./dist-types/storage/storage-scan.d.ts",
+      "default": "./src/storage/storage-scan.ts"
+    },
+    "./storage/workspace-purge": {
+      "types": "./dist-types/storage/workspace-purge.d.ts",
+      "default": "./src/storage/workspace-purge.ts"
+    }
+  }
+}

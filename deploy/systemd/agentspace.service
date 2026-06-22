@@ -1,0 +1,16 @@
+[Unit]
+Description=AgentSpace Web
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/AgentSpace
+ExecStart=/usr/bin/npm run start:web
+Restart=always
+RestartSec=5
+User=www-data
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/agentspace/web.env
+
+[Install]
+WantedBy=multi-user.target

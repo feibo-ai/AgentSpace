@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "types": [
+      "node"
+    ],
+    "typeRoots": [
+      "./node_modules/@types",
+      "../../apps/web/node_modules/@types"
+    ],
+    "rootDir": "./src",
+    "outDir": "./dist-types",
+    "paths": {
+      "@agent-space/domain": [
+        "../domain/dist-types/index.d.ts"
+      ],
+      "@agent-space/domain/*": [
+        "../domain/dist-types/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
+}

@@ -1,0 +1,139 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { TaskBoardPageClient } from "@/features/task-board/task-board-page-client";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { FeedbackToastProvider } from "@/shared/ui/feedback-toast-provider";
+import type { TaskBoardPageData } from "@/features/dashboard/data";
+
+const taskBoardInvalidation = {
+  workspaceId: "workspace-alpha",
+  modules: ["task-board", "inbox", "agents"],
+  resources: [{ type: "task", id: "task-1" }],
+  shell: "counters",
+} as const;
+const moveTaskToColumnAction = vi.fn<(taskId: string, status: string) => Promise<{
+  data: undefined;
+  invalidation?: typeof taskBoardInvalidation;
+}>>(async () => ({
+  data: undefined,
+}));
+const mockRefresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: mockRefresh,
+  }),
+}));
+
+vi.mock("@/features/task-board/actions", () => ({
+  moveTaskToColumnAction: (taskId: string, status: string) =>
+    moveTaskToColumnAction(taskId, status),
+  estimateTaskAction: vi.fn(async () => ({
+    taskTitle: "trip",
+    channelName: "travel",
+    agents: [],
+  })),
+}));
+
+function mockMatchMedia(matches: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches,
+      media: "(max-width: 860px)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+const data: TaskBoardPageData = {
+  tasks: [
+    {
+      id: "task-1",
+      title: "整理行程",
+      channel: "travel",
+      assignee: "Atlas",
+      priority: "high",
+      status: "todo",
+    },
+    {
+      id: "task-2",
+      title: "确认酒店",
+      channel: "travel",
+      assignee: "Atlas",
+      priority: "medium",
+      status: "done",
+    },
+  ],
+  columns: [],
+  agents: [{ id: "Atlas", name: "Atlas" }],
+  channels: [{ name: "travel" }],
+  totalCount: 2,
+  todoCount: 1,
+  inProgressCount: 0,
+  doneCount: 1,
+};
+
+describe("TaskBoardPageClient", () => {
+  beforeEach(() => {
+    mockMatchMedia(false);
+    moveTaskToColumnAction.mockClear();
+    mockRefresh.mockReset();
+  });
+
+  it("shows one column at a time and updates status on compact layouts", async () => {
+    mockMatchMedia(true);
+    const user = userEvent.setup();
+
+    render(
+      <LanguageProvider>
+        <FeedbackToastProvider>
+          <TaskBoardPageClient data={data} />
+        </FeedbackToastProvider>
+      </LanguageProvider>,
+    );
+
+    expect(screen.getByText("整理行程")).toBeInTheDocument();
+    expect(screen.queryByText("确认酒店")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Done/i }));
+    expect(screen.getByText("确认酒店")).toBeInTheDocument();
+    expect(screen.queryByText("整理行程")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Todo/i }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "更新任务状态" }), "done");
+    expect(moveTaskToColumnAction).toHaveBeenCalledWith("task-1", "done");
+  });
+
+  it("uses module refresh callback after moving a task inside the workbench", async () => {
+    mockMatchMedia(true);
+    const user = userEvent.setup();
+    const onDataChanged = vi.fn();
+    const onInvalidation = vi.fn();
+    moveTaskToColumnAction.mockResolvedValueOnce({
+      data: undefined,
+      invalidation: taskBoardInvalidation,
+    });
+
+    render(
+      <LanguageProvider>
+        <FeedbackToastProvider>
+          <TaskBoardPageClient data={data} onDataChanged={onDataChanged} onInvalidation={onInvalidation} />
+        </FeedbackToastProvider>
+      </LanguageProvider>,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "更新任务状态" }), "done");
+
+    expect(moveTaskToColumnAction).toHaveBeenCalledWith("task-1", "done");
+    await waitFor(() => expect(onInvalidation).toHaveBeenCalledWith(taskBoardInvalidation));
+    await waitFor(() => expect(onDataChanged).toHaveBeenCalledTimes(1));
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+});

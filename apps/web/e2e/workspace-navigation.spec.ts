@@ -1,0 +1,233 @@
+import { expect, test, type Page } from "@playwright/test";
+import { openSeededWorkspacePage, seedChannelScopedGuestSession } from "./helpers";
+
+test("preserves the IM composer draft across workbench module switches", async ({ page }) => {
+  const session = await openSeededWorkspacePage(page, "/im");
+  const draft = `draft-${Date.now().toString(36)}`;
+
+  const composer = page.getByPlaceholder(new RegExp(`发送到 ${escapeRegExp(session.channelName)}|Send to ${escapeRegExp(session.channelName)}`, "i"));
+  await expect(composer).toBeVisible();
+  await composer.fill(draft);
+
+  await page.getByRole("link", { name: /打开任务|Open tasks/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/task-board(?:\\?.*)?$`));
+  await expect(page.getByRole("button", { name: /按状态|By Status/i })).toBeVisible();
+
+  await page.getByRole("link", { name: /消息|Messages/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/im(?:\\?.*)?$`));
+  await expect(composer).toHaveValue(draft);
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/task-board(?:\\?.*)?$`));
+  await page.goForward();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/im(?:\\?.*)?$`));
+  await expect(composer).toHaveValue(draft);
+});
+
+test("keeps agents mode query and active content through navigation and refresh", async ({ page }) => {
+  const session = await openSeededWorkspacePage(page, "/agents?mode=container");
+
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/agents\\?mode=container$`));
+  await expect(page.getByRole("heading", { name: /在线执行引擎|Online execution engines/i })).toBeVisible();
+
+  await page.getByRole("link", { name: /员工管理|Agent Management/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/agents\\?mode=agent$`));
+  await expect(page.getByRole("heading", { name: /全部 Agent|All agents/i })).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/agents\\?mode=container$`));
+  await expect(page.getByRole("heading", { name: /在线执行引擎|Online execution engines/i })).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/agents\\?mode=container$`));
+  await expect(page.getByRole("heading", { name: /在线执行引擎|Online execution engines/i })).toBeVisible();
+});
+
+test("keeps the final active module after rapid desktop switching", async ({ page }) => {
+  const session = await openSeededWorkspacePage(page, "/inbox");
+
+  await page.getByRole("link", { name: /通知|Feed/i }).click();
+  await page.getByRole("link", { name: /员工管理|Agent Management/i }).click();
+  await page.getByRole("link", { name: /知识页|Knowledge/i }).click();
+  await page.getByRole("link", { name: /员工管理|Agent Management/i }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/agents\\?mode=agent$`));
+  await expect(page.getByRole("heading", { name: /全部 Agent|All agents/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /员工管理|Agent Management/i })).toHaveClass(/workspace-sidebar__section-link--active/);
+});
+
+test("keeps workspace chrome mounted during client module switches", async ({ page }) => {
+  const session = await openSeededWorkspacePage(page, "/im");
+  await page.locator("[data-testid='workspace-layout']").evaluate((element) => {
+    const key = "__agentSpaceWorkspaceChrome";
+    const record = {
+      layout: element,
+      main: document.querySelector("[data-testid='workspace-main']"),
+      sidebar: document.querySelector("[data-testid='workspace-sidebar']"),
+    };
+    (window as typeof window & Record<string, unknown>)[key] = record;
+  });
+
+  await page.getByRole("link", { name: /打开任务|Open tasks/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/task-board(?:\\?.*)?$`));
+  await expect(page.getByRole("button", { name: /按状态|By Status/i })).toBeVisible();
+
+  await page.getByRole("link", { name: /消息|Messages/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/im(?:\\?.*)?$`));
+  await expect(page.getByRole("heading", { name: session.channelName })).toBeVisible();
+
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const record = (window as typeof window & {
+        __agentSpaceWorkspaceChrome?: {
+          layout: Element | null;
+          main: Element | null;
+          sidebar: Element | null;
+        };
+      }).__agentSpaceWorkspaceChrome;
+      return Boolean(
+        record?.layout?.isConnected
+          && record.main?.isConnected
+          && record.sidebar?.isConnected
+          && record.layout === document.querySelector("[data-testid='workspace-layout']")
+          && record.main === document.querySelector("[data-testid='workspace-main']")
+          && record.sidebar === document.querySelector("[data-testid='workspace-sidebar']"),
+      );
+    }),
+  ).toBe(true);
+});
+
+test("restores settings members section after refresh", async ({ page }) => {
+  const session = await openSeededWorkspacePage(page, "/settings/members");
+
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/settings/members(?:\\?.*)?$`));
+  await expect(settingsSectionLabel(page, /成员与角色|Members & roles/i)).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/settings/members(?:\\?.*)?$`));
+  await expect(settingsSectionLabel(page, /成员与角色|Members & roles/i)).toBeVisible();
+});
+
+test("switches settings sections through the client workbench", async ({ page }) => {
+  const session = await openSeededWorkspacePage(page, "/settings/account");
+  let membersApiHits = 0;
+  let accessApiHits = 0;
+
+  await page.route("**/api/workspaces/**/modules/settings**", async (route) => {
+    const url = new URL(route.request().url());
+    const section = url.searchParams.get("section");
+    if (section !== "members" && section !== "access") {
+      await route.fallback();
+      return;
+    }
+
+    if (section === "members") {
+      membersApiHits += 1;
+    } else {
+      accessApiHits += 1;
+    }
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          moduleId: "settings",
+          data: {
+            currentMembershipRole: "owner",
+            currentUserDisplayName: session.userDisplayName,
+            currentUserEmail: "workbench-owner@example.com",
+            currentUserId: session.userId,
+            currentWorkspaceName: "E2E Workbench Workspace",
+            currentWorkspaceSlug: session.workspaceSlug,
+            initialSection: section,
+            invitations: [],
+            channelAccessRequests: [],
+            channelInvitations: [],
+            members: section === "members"
+              ? [
+                {
+                  userId: session.userId,
+                  displayName: "Workbench Loaded Member",
+                  primaryEmail: "workbench-owner@example.com",
+                  role: "owner",
+                },
+              ]
+              : [],
+            sessions: [],
+          },
+        },
+      }),
+    });
+  });
+
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/settings/account(?:\\?.*)?$`));
+  await expect(settingsSectionLabel(page, /我的账号|My account/i)).toBeVisible();
+  await expect(page.locator(".settings-page[data-hydrated='true']")).toBeVisible();
+
+  await page.getByRole("link", { name: /成员与角色|Members/i }).click();
+  await expect.poll(() => membersApiHits).toBe(1);
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/settings/members(?:\\?.*)?$`));
+  await expect(settingsSectionLabel(page, /成员与角色|Members & roles/i)).toBeVisible();
+  await expect(page.getByText("Workbench Loaded Member")).toBeVisible();
+
+  await page.getByRole("link", { name: /邀请与访问|Access/i }).click();
+  await expect.poll(() => accessApiHits).toBe(1);
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/settings/access(?:\\?.*)?$`));
+  await expect(settingsSectionLabel(page, /邀请与访问|Invites & access/i)).toBeVisible();
+});
+
+test("closes the mobile sidebar after module navigation and restores with back", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const session = await openSeededWorkspacePage(page, "/im");
+  const layout = page.locator(".workspace-layout");
+
+  if (!await layout.evaluate((element) => element.classList.contains("workspace-layout--sidebar-open"))) {
+    await page.getByRole("button", { name: /打开导航|Open navigation/i }).click();
+  }
+  await expect(layout).toHaveClass(/workspace-layout--sidebar-open/);
+
+  await page.getByRole("link", { name: /打开任务|Open tasks/i }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/task-board(?:\\?.*)?$`));
+  await expect(layout).not.toHaveClass(/workspace-layout--sidebar-open/);
+  await expect(page.getByRole("button", { name: /按状态|By Status/i })).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/w/${escapeRegExp(session.workspaceSlug)}/im(?:\\?.*)?$`));
+  await expect(page.getByRole("heading", { name: session.channelName })).toBeVisible();
+});
+
+test("keeps channel-scoped guests inside authorized IM data", async ({ page }) => {
+  const session = await seedChannelScopedGuestSession(page);
+
+  await page.goto(`/w/${session.workspaceSlug}/im`);
+  await expect(page.locator(".workspace-layout")).toBeVisible();
+  await expect(page.getByRole("heading", { name: session.channelName })).toBeVisible();
+  await expect(page.getByText(session.privateChannelName, { exact: true })).toHaveCount(0);
+
+  const imResponse = await page.request.get(`/api/workspaces/${encodeURIComponent(session.workspaceSlug)}/modules/im`);
+  expect(imResponse.status()).toBe(200);
+  const imPayload = await imResponse.json() as {
+    data: {
+      moduleId: "im";
+      data: {
+        channels: Array<{ name: string; channelName?: string }>;
+        threads: Array<{ channelName: string }>;
+      };
+    };
+  };
+  const channelNames = imPayload.data.data.channels.map((channel) => channel.channelName ?? channel.name);
+  expect(channelNames).toContain(session.channelName);
+  expect(channelNames).not.toContain(session.privateChannelName);
+  expect(imPayload.data.data.threads.map((thread) => thread.channelName)).not.toContain(session.privateChannelName);
+
+  const taskBoardResponse = await page.request.get(`/api/workspaces/${encodeURIComponent(session.workspaceSlug)}/modules/task-board`);
+  expect(taskBoardResponse.status()).toBe(403);
+});
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function settingsSectionLabel(page: Page, name: RegExp) {
+  return page.locator(".settings-group__eyebrow").filter({ hasText: name });
+}

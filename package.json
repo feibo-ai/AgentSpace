@@ -1,0 +1,28 @@
+{
+  "name": "agent-space",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "cli": "node --experimental-strip-types apps/cli/src/index.ts",
+    "daemon:pack": "npm pack ./packages/daemon",
+    "setup": "npm --prefix apps/web install --no-audit --no-fund && npm --prefix apps/cli install --no-audit --no-fund && npm --prefix packages/db install --no-audit --no-fund && npm --prefix packages/services install --no-audit --no-fund && npm --prefix packages/daemon install --no-audit --no-fund",
+    "typecheck:deps": "./apps/web/node_modules/.bin/tsc -p ./packages/domain/tsconfig.types.json --incremental false && ./apps/web/node_modules/.bin/tsc -p ./packages/db/tsconfig.types.json --incremental false && ./apps/web/node_modules/.bin/tsc -p ./packages/services/tsconfig.types.json --incremental false && ./apps/web/node_modules/.bin/tsc -p ./packages/sandbox/tsconfig.types.json --incremental false && ./apps/web/node_modules/.bin/tsc -p ./packages/daemon/tsconfig.types.json --incremental false",
+    "typecheck:web:only": "./apps/web/node_modules/.bin/tsc -p ./apps/web/tsconfig.typecheck.json --noEmit",
+    "typecheck:cli": "npm --prefix apps/cli run typecheck",
+    "typecheck:daemon": "./apps/cli/node_modules/.bin/tsc -p ./packages/daemon/tsconfig.json --noEmit",
+    "db:pg:status": "node --experimental-strip-types packages/db/src/postgres-cli.ts status",
+    "db:pg:init": "node --experimental-strip-types packages/db/src/postgres-cli.ts init",
+    "db:pg:migrate": "node --experimental-strip-types packages/db/src/postgres-cli.ts migrate-from-sqlite",
+    "db:pg:cutover-plan": "node --experimental-strip-types packages/db/src/postgres-cli.ts cutover-plan",
+    "dev:web": "npm --prefix apps/web run dev -- --hostname 0.0.0.0 --port 1455",
+    "start:web": "npm --prefix apps/web run start -- --hostname 0.0.0.0 --port 1455",
+    "build": "npm --prefix apps/web run build",
+    "typecheck": "npm run typecheck:deps && npm run typecheck:web:only && npm run typecheck:cli && npm run typecheck:daemon",
+    "lint:web": "npm --prefix apps/web run lint",
+    "test:web": "npm --prefix apps/web run test",
+    "test:e2e:web": "npm --prefix apps/web run test:e2e",
+    "quality:web": "npm --prefix apps/web run typecheck && npm --prefix apps/web run lint && npm --prefix apps/web run test"
+  }
+}
